@@ -1,0 +1,78 @@
+appId: com.altixcode.voicecrisp
+name: Clean a recording end to end
+---
+# The fixture is a 4.4s take that is deliberately wrong in three ways: recorded
+# about 20 dB too quietly, with 42 Hz rumble underneath and a boxy 250 Hz
+# resonance on top. A clean recording would let every assertion pass on a file
+# that was already fine.
+- launchApp:
+    clearState: false
+- takeScreenshot: artifacts/01-home
+
+- tapOn: "Choose a Recording"
+# Anchor on the document picker's own chrome rather than on text the app also
+# has: the app's own button says "Choose a Recording" and would satisfy a
+# looser wait immediately, firing the taps below while the sheet is still
+# presenting.
+- extendedWaitUntil:
+    visible: ".*(Recents|On My iPhone|Browse).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 8000
+# Navigated unconditionally. The picker reopens wherever it was left, which
+# after one run is the app's own folder, so keying this off "No Recents" only
+# works the first time. Tapping Browse returns to the locations list from
+# anywhere, including from inside a subfolder.
+- tapOn: "Browse"
+- waitForAnimationToEnd:
+    timeout: 6000
+- runFlow:
+    when:
+      visible: "On My iPhone"
+    commands:
+      - tapOn: "On My iPhone"
+      - waitForAnimationToEnd:
+          timeout: 6000
+- takeScreenshot: artifacts/02-files
+# The thumbnail, by position. Every text match here lands on the filename
+# label, which is not a hit target -- the tap reports COMPLETED and selects
+# nothing -- and the cell element's own centre falls on that same label.
+# Second cell, not first: the app declares file sharing, so this folder also
+# holds a VoiceCrisp folder, and it sorts ahead of the fixture.
+- tapOn:
+    point: "201,225"
+
+# The loaded file's own sample rate, which also proves decode read the format
+# rather than assuming one.
+- extendedWaitUntil:
+    visible: ".*48 kHz.*"
+    timeout: 45000
+- takeScreenshot: artifacts/03-loaded
+
+- tapOn: "Clean It Up"
+# The report only renders once a result exists, so this is the assertion that
+# the chain ran and the encoder wrote a file.
+- extendedWaitUntil:
+    visible: "What Changed"
+    timeout: 300000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: artifacts/04-report
+
+- scrollUntilVisible:
+    element:
+      text: "Save to Files"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Save to Files"
+- runFlow:
+    when:
+      visible: ".*(Allow|ALLOW).*"
+    commands:
+      - tapOn: ".*(Allow|ALLOW).*"
+# Asserted by its own text. A loose ".*OK.*" also matches a denial alert, which
+# is how a refused save used to read as a pass in this suite.
+- extendedWaitUntil:
+    visible: "Saved!"
+    timeout: 60000
+- takeScreenshot: artifacts/05-saved

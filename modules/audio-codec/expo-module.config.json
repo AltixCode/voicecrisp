@@ -1,0 +1,5 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": { "modules": ["AudioCodecModule"] },
+  "android": { "modules": ["expo.modules.audiocodec.AudioCodecModule"] }
+}

@@ -235,3 +235,66 @@ describe('enhance measurement ordering, isolated', () => {
     expect(report.loudnessAfterLufs).toBeLessThan(-10);
   });
 });
+
+describe('rumble rejection through the whole chain', () => {
+  /** Amplitude at one frequency, by the Goertzel algorithm. */
+  const amplitudeAt = (samples: Float32Array, sampleRate: number, hz: number) => {
+    const omega = (2 * Math.PI * hz) / sampleRate;
+    const coefficient = 2 * Math.cos(omega);
+    let s1 = 0;
+    let s2 = 0;
+    for (const sample of samples) {
+      const s0 = sample + coefficient * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    const power = s1 * s1 + s2 * s2 - coefficient * s1 * s2;
+    return (2 * Math.sqrt(Math.max(power, 0))) / samples.length;
+  };
+
+  const RUMBLE_HZ = 42;
+  const VOICE_HZ = 500;
+
+  const rumbleAndVoice = (sampleRate: number, seconds: number) => {
+    const samples = new Float32Array(Math.round(sampleRate * seconds));
+    for (let index = 0; index < samples.length; index += 1) {
+      const time = index / sampleRate;
+      samples[index] =
+        0.2 * Math.sin(2 * Math.PI * VOICE_HZ * time) +
+        0.2 * Math.sin(2 * Math.PI * RUMBLE_HZ * time);
+    }
+    return samples;
+  };
+
+  it('leaves handling noise at least 20 dB further down than the voice', () => {
+    const sampleRate = 48000;
+    const input = rumbleAndVoice(sampleRate, 2);
+    const output = Float32Array.from(input);
+    enhance(output, sampleRate);
+
+    // Measured against the voice tone, because the chain deliberately changes
+    // the overall level: comparing raw rumble amplitude would credit the filter
+    // for the normaliser's gain, or blame it for gain it did not apply.
+    const before =
+      20 * Math.log10(amplitudeAt(input, sampleRate, RUMBLE_HZ) / amplitudeAt(input, sampleRate, VOICE_HZ));
+    const after =
+      20 * Math.log10(amplitudeAt(output, sampleRate, RUMBLE_HZ) / amplitudeAt(output, sampleRate, VOICE_HZ));
+
+    // One 12 dB/octave section gets only about 8 dB here, which is why the
+    // chain cascades two. Dropping back to one fails this.
+    expect(before - after).toBeGreaterThan(20);
+  });
+
+  it('leaves the voice itself alone', () => {
+    const sampleRate = 48000;
+    const input = rumbleAndVoice(sampleRate, 2);
+    const output = Float32Array.from(input);
+    const report = enhance(output, sampleRate);
+
+    // The voice tone survives the filters: what changes its level is the
+    // normaliser, and by the amount the report says it applied.
+    const voiceBefore = 20 * Math.log10(amplitudeAt(input, sampleRate, VOICE_HZ));
+    const voiceAfter = 20 * Math.log10(amplitudeAt(output, sampleRate, VOICE_HZ));
+    expect(voiceAfter - voiceBefore).toBeGreaterThan(report.gain.gainDb - 6);
+  });
+});

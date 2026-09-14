@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "VoiceCrisp",
+    "slug": "voicecrisp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "voicecrisp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.altixcode.voicecrisp",
+      "buildNumber": "1",
+      "infoPlist": {
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSMicrophoneUsageDescription": "VoiceCrisp does not record; this is required by the audio framework it uses to play back your cleaned file."
+      }
+    },
+    "android": {
+      "package": "com.altixcode.voicecrisp",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-audio",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "VoiceCrisp saves your cleaned recording to your music library.",
+          "photosPermission": "VoiceCrisp saves your cleaned recording to your music library.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "./plugins/withIOSSceneLifecycle",
+      "./plugins/withAndroidRtl"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

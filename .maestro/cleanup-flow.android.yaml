@@ -1,0 +1,60 @@
+appId: com.altixcode.voicecrisp
+name: Clean a recording end to end (Android)
+---
+# The fixture is a 4.4s take that is deliberately wrong in three ways: recorded
+# about 20 dB too quietly, with 42 Hz rumble underneath and a boxy 250 Hz
+# resonance on top. A clean recording would let every assertion pass on a file
+# that was already fine.
+# Same contract as the iOS flow against a different engine: MediaCodec decodes
+# and encodes here, not AVAssetReader and AVAssetWriter. One passing says
+# nothing about the other, so both are gated by reading the exported file back.
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd:
+    timeout: 8000
+- takeScreenshot: artifacts/android-01-home
+
+- tapOn: "Choose a Recording"
+# Anchor on the document picker's own chrome rather than on text the app also
+# has: the app's own button says "Choose a Recording" and would satisfy a
+# looser wait immediately, firing the taps below while the sheet is still
+# presenting.
+- extendedWaitUntil:
+    visible: ".*voicecrisp-rough.*"
+    timeout: 30000
+- tapOn: ".*voicecrisp-rough.*"
+
+# The loaded file's own sample rate, which also proves decode read the format
+# rather than assuming one.
+- extendedWaitUntil:
+    visible: ".*48 kHz.*"
+    timeout: 45000
+- takeScreenshot: artifacts/android-02-loaded
+
+- tapOn: "Clean It Up"
+# The report only renders once a result exists, so this is the assertion that
+# the chain ran and the encoder wrote a file.
+- extendedWaitUntil:
+    visible: "What Changed"
+    timeout: 300000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: artifacts/android-03-report
+
+- scrollUntilVisible:
+    element:
+      text: "Save to Files"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Save to Files"
+- runFlow:
+    when:
+      visible: ".*(Allow|ALLOW).*"
+    commands:
+      - tapOn: ".*(Allow|ALLOW).*"
+# Asserted by its own text. A loose ".*OK.*" also matches a denial alert, which
+# is how a refused save used to read as a pass in this suite.
+- extendedWaitUntil:
+    visible: "Saved!"
+    timeout: 60000
+- takeScreenshot: artifacts/android-04-saved

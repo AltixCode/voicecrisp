@@ -6,6 +6,8 @@ import { integratedLoudness, samplePeakDb, planGain, applyGain, type GainPlan } 
  *
  * Ordering is not cosmetic here:
  *  1. Filters first, because they change the signal the later stages measure.
+ *     The high-pass is two cascaded sections; see below for why one is not
+ *     enough.
  *  2. Compression next, which raises quiet words and so raises the loudness the
  *     normaliser will read.
  *  3. Measure loudness and peak last, on the audio as it will actually be
@@ -39,8 +41,11 @@ export const BROADCAST: EnhanceSettings = {
   presenceGainDb: 3.5,
   compressorThresholdDb: -24,
   compressorRatio: 2.5,
-  // -14 LUFS with a -1.5 dBTP ceiling is what TikTok, YouTube and Reels
-  // normalise to; matching it means the platform leaves the level alone.
+  // -14 LUFS is what TikTok, YouTube and Reels normalise to; matching it means
+  // the platform leaves the level alone. The ceiling is sample peak, not true
+  // peak -- measuring true peak needs oversampling, and -1.5 dB leaves enough
+  // headroom that the inter-sample peaks stay under 0 dBTP anyway. It is not
+  // labelled "true peak" anywhere the user can see it, because it is not.
   targetLufs: -14,
   ceilingDb: -1.5,
 };
@@ -91,6 +96,13 @@ export const enhance = (
 ): EnhanceReport => {
   const loudnessBeforeLufs = integratedLoudness(samples, sampleRate);
 
+  // Two sections, not one. A single biquad is 12 dB per octave, which leaves
+  // 40 Hz handling noise only about 8 dB down -- measurably still there, and
+  // the stage's whole job is to remove it. Cascading a second identical section
+  // makes it 24 dB per octave and takes the same rumble to roughly 23 dB down.
+  // The cost is a little more of the 80 Hz region going with it, which for a
+  // voice is nothing.
+  applyBiquad(samples, highpass(sampleRate, settings.highpassHz));
   applyBiquad(samples, highpass(sampleRate, settings.highpassHz));
   applyBiquad(samples, peakingEq(sampleRate, settings.mudHz, settings.mudGainDb));
   applyBiquad(samples, peakingEq(sampleRate, settings.presenceHz, settings.presenceGainDb));
