@@ -20,7 +20,22 @@
       "infoPlist": {
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
-        "NSMicrophoneUsageDescription": "VoiceCrisp does not record; this is required by the audio framework it uses to play back your cleaned file."
+        "NSMicrophoneUsageDescription": "VoiceCrisp does not record; this is required by the audio framework it uses to play back your cleaned file.",
+        "CFBundleLocalizations": [
+          "en",
+          "es",
+          "fr",
+          "de",
+          "ru",
+          "zh",
+          "ja",
+          "pt",
+          "ko",
+          "it",
+          "tr",
+          "el"
+        ],
+        "CFBundleDevelopmentRegion": "en"
       }
     },
     "android": {
@@ -46,7 +61,26 @@
         }
       ],
       "./plugins/withIOSSceneLifecycle",
-      "./plugins/withAndroidRtl"
+      "./plugins/withAndroidRtl",
+      [
+        "./plugins/withAndroidLocales",
+        {
+          "locales": [
+            "en",
+            "es",
+            "fr",
+            "de",
+            "ru",
+            "zh",
+            "ja",
+            "pt",
+            "ko",
+            "it",
+            "tr",
+            "el"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
