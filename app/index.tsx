@@ -16,6 +16,10 @@ import { codec, toMono, fromMono } from '../modules/audio-codec';
 import { useTheme } from '../src/theme/useTheme';
 import { t } from '../src/i18n';
 import { ForwardArrow } from '../src/components/DirectionalIcons';
+import { AdBanner } from '../src/components/AdBanner';
+import { useAdsStore } from '../src/store/adsStore';
+import { showInterstitial, showPrivacyOptionsForm } from '../src/services/ads';
+import { shouldShowInterstitial } from '../src/services/adPolicy';
 
 const formatDuration = (seconds: number) => {
   const whole = Math.round(seconds);
@@ -27,6 +31,10 @@ const formatDb = (value: number) =>
   Number.isFinite(value) ? value.toFixed(1) : '--';
 
 export default function HomeScreen() {
+  // Google requires a persistent entry back into the consent form wherever UMP reports that
+  // privacy options are available, which in practice means the EEA and the regulated US
+  // states. It is absent everywhere else rather than shown as a dead control.
+  const offerPrivacyOptions = useAdsStore((state) => state.consent.offerPrivacyOptions);
   const theme = useTheme();
   const {
     source, samples, report, outputUri, settings, stage, isPro,
@@ -104,6 +112,22 @@ export default function HomeScreen() {
    * under "On My iPhone". On Android Files does not show app storage at all, so
    * the file goes into the shared music library instead.
    */
+  const maybeShowInterstitial = useCallback(async () => {
+    const { completions, lastInterstitialAt, markInterstitialShown } = useAdsStore.getState();
+    const decision = shouldShowInterstitial({
+      completions,
+      lastInterstitialAt,
+      now: Date.now(),
+      // Read at call time rather than captured: the user may have bought the upgrade from the
+      // paywall between opening this screen and finishing the work.
+      isPro: useAudioStore.getState().isPro,
+    });
+    if (!decision) return;
+    // Only a shown-and-dismissed ad resets the clock. Counting an unfilled request would
+    // suppress the next several ads for nothing.
+    if (await showInterstitial()) await markInterstitialShown();
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!outputUri || !source) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -122,7 +146,12 @@ export default function HomeScreen() {
         await FileSystem.copyAsync({ from: outputUri, to: destination });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(t('saved'), t('savedDesc'));
+      await useAdsStore.getState().recordCompletion();
+      // The ad waits behind the confirmation. Interrupting the moment the file lands -- or
+      // worse, while it is being written -- is the version of this that gets one-star reviews.
+      Alert.alert(t('saved'), t('savedDesc'), [
+        { text: t('ok'), onPress: () => void maybeShowInterstitial() },
+      ]);
     } catch (error) {
       Alert.alert(t('saveFailed'), error instanceof Error ? error.message : String(error));
     }
@@ -309,7 +338,24 @@ export default function HomeScreen() {
             </View>
           </View>
         ))}
+        {offerPrivacyOptions ? (
+          <TouchableOpacity
+            onPress={() => {
+              void showPrivacyOptionsForm();
+            }}
+            accessibilityRole="button"
+            className="mt-2 py-3 items-center"
+            style={{ minHeight: 44 }}
+          >
+            <Text className="text-xs font-semibold underline" style={{ color: theme.textSecondary }}>
+              {t('adPrivacySettings')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
+      {/* Anchored below the scroll area rather than inside it: a banner that scrolls with the
+          content can sit under a finger reaching for the button above it. */}
+      <AdBanner />
     </SafeAreaView>
   );
 }
