@@ -14,6 +14,7 @@ import { useAudioStore, FREE_SECONDS } from '../src/store/useAudioStore';
 import { enhance } from '../src/engine/enhanceChain';
 import { codec, toMono, fromMono } from '../modules/audio-codec';
 import { useTheme } from '../src/theme/useTheme';
+import { useTabletColumn } from '../src/theme/useTabletColumn';
 import { t } from '../src/i18n';
 import { ForwardArrow } from '../src/components/DirectionalIcons';
 import { AdBanner } from '../src/components/AdBanner';
@@ -36,6 +37,7 @@ export default function HomeScreen() {
   // states. It is absent everywhere else rather than shown as a dead control.
   const offerPrivacyOptions = useAdsStore((state) => state.consent.offerPrivacyOptions);
   const theme = useTheme();
+  const tabletColumn = useTabletColumn();
   const {
     source, samples, report, outputUri, settings, stage, isPro,
     setSource, setResult, setStage, overFreeLimit,
@@ -176,7 +178,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} className="flex-1 px-5" style={{ backgroundColor: theme.background }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 , ...tabletColumn}}>
         <View className="mt-4 mb-5">
           <View
             className="self-start border px-3 py-1 rounded-full mb-3 flex-row items-center"
