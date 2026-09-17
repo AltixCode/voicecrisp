@@ -178,7 +178,16 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} className="flex-1 px-5" style={{ backgroundColor: theme.background }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 , ...tabletColumn}}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{
+          paddingBottom: 32,
+          ...tabletColumn,
+          // A fixed block -- the picker card, the action, the result and three
+          // claims -- not a list that grows, so it is centred when there is
+          // slack. On a 13" iPad it was leaving a third of the display empty
+          // beneath it.
+          flexGrow: 1,
+          justifyContent: 'center',
+        }}>
         <View className="mt-4 mb-5">
           <View
             className="self-start border px-3 py-1 rounded-full mb-3 flex-row items-center"
