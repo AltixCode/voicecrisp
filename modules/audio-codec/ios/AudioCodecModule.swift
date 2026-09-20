@@ -43,6 +43,20 @@ public class AudioCodecModule: Module {
         }
       }
     }
+
+    AsyncFunction("saveToFiles") { (uri: String, promise: Promise) in
+      DispatchQueue.main.async {
+        guard let vc = self.appContext.utilities?.currentViewController() else {
+          promise.resolve(false)
+          return
+        }
+        let url = Self.url(uri)
+        let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+        vc.present(picker, animated: true) {
+          promise.resolve(true)
+        }
+      }
+    }
   }
 
   private struct Decoded {
@@ -238,7 +252,18 @@ public class AudioCodecModule: Module {
   }
 
   private static func url(_ uri: String) -> URL {
-    URL(string: uri) ?? URL(fileURLWithPath: uri)
+    if uri.hasPrefix("file://") {
+      let path = String(uri.dropFirst(7))
+      let unescaped = path.removingPercentEncoding ?? path
+      return URL(fileURLWithPath: unescaped)
+    }
+    if let parsed = URL(string: uri), parsed.scheme != nil {
+      if parsed.isFileURL {
+        return URL(fileURLWithPath: parsed.path)
+      }
+      return parsed
+    }
+    return URL(fileURLWithPath: uri)
   }
 
   private struct CodecError: Error {

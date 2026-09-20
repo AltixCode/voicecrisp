@@ -18,6 +18,8 @@ interface AudioCodecModule {
   decode(uri: string): Promise<DecodedAudio>;
   /** Writes PCM back out as AAC in an m4a container. */
   encode(samples: Uint8Array, sampleRate: number, channels: number): Promise<EncodedAudio>;
+  /** Presents the native system Save to Files picker on iOS. */
+  saveToFiles?(uri: string): Promise<boolean>;
 }
 
 /**

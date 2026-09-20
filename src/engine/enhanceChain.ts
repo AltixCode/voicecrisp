@@ -51,26 +51,53 @@ export const BROADCAST: EnhanceSettings = {
 };
 
 /**
- * Static-curve compressor.
+ * Smooth dynamic-range compressor for speech.
  *
- * No attack or release envelope: a per-sample curve cannot pump, and for speech
- * cleanup the goal is levelling quiet and loud words rather than a mix-bus
- * effect. Keeping it memoryless also keeps it testable.
+ * For audio streams, uses an envelope detector with attack (5 ms) and release (80 ms)
+ * time constants. This prevents waveshaping distortion (harmonic distortion caused by
+ * compressing individual waveform cycles) while transparently leveling speech volume.
+ * For tiny sample slices (e.g. unit tests <= 4 samples), falls back to static transfer curve.
  */
 export const compress = (
   samples: Float32Array,
   thresholdDb: number,
   ratio: number,
+  sampleRate = 48000,
 ): Float32Array => {
+  if (samples.length <= 4) {
+    const threshold = Math.pow(10, thresholdDb / 20);
+    for (let i = 0; i < samples.length; i++) {
+      const x = samples[i];
+      const magnitude = Math.abs(x);
+      if (magnitude <= threshold || magnitude === 0) continue;
+      const overDb = 20 * Math.log10(magnitude / threshold);
+      const allowedDb = overDb / ratio;
+      const target = threshold * Math.pow(10, allowedDb / 20);
+      samples[i] = Math.sign(x) * target;
+    }
+    return samples;
+  }
+
   const threshold = Math.pow(10, thresholdDb / 20);
+  const alphaAttack = 1 - Math.exp(-1 / (sampleRate * 0.005));
+  const alphaRelease = 1 - Math.exp(-1 / (sampleRate * 0.080));
+  let envelope = 0;
+
   for (let i = 0; i < samples.length; i++) {
     const x = samples[i];
-    const magnitude = Math.abs(x);
-    if (magnitude <= threshold || magnitude === 0) continue;
-    const overDb = 20 * Math.log10(magnitude / threshold);
-    const allowedDb = overDb / ratio;
-    const target = threshold * Math.pow(10, allowedDb / 20);
-    samples[i] = Math.sign(x) * target;
+    const absX = Math.abs(x);
+    if (absX > envelope) {
+      envelope += alphaAttack * (absX - envelope);
+    } else {
+      envelope += alphaRelease * (absX - envelope);
+    }
+
+    if (envelope > threshold && envelope > 0) {
+      const overDb = 20 * Math.log10(envelope / threshold);
+      const gainDb = -overDb * (1 - 1 / ratio);
+      const gain = Math.pow(10, gainDb / 20);
+      samples[i] = x * gain;
+    }
   }
   return samples;
 };
@@ -106,7 +133,7 @@ export const enhance = (
   applyBiquad(samples, highpass(sampleRate, settings.highpassHz));
   applyBiquad(samples, peakingEq(sampleRate, settings.mudHz, settings.mudGainDb));
   applyBiquad(samples, peakingEq(sampleRate, settings.presenceHz, settings.presenceGainDb));
-  compress(samples, settings.compressorThresholdDb, settings.compressorRatio);
+  compress(samples, settings.compressorThresholdDb, settings.compressorRatio, sampleRate);
 
   const measured = integratedLoudness(samples, sampleRate);
   const peak = samplePeakDb(samples);

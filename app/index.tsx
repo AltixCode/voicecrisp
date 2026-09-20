@@ -54,7 +54,17 @@ export default function HomeScreen() {
     if (picked.canceled || !picked.assets?.length) return;
 
     const asset = picked.assets[0];
+    setBusy(true);
     setStage('decoding');
+    // Immediately reflect the selected file name and clear prior results
+    setSource({
+      uri: asset.uri,
+      name: asset.name ?? 'recording',
+      sampleRate: 48000,
+      channels: 1,
+      duration: 0,
+    });
+
     try {
       const decoded = await codec.decode(asset.uri);
       setSource(
@@ -70,13 +80,17 @@ export default function HomeScreen() {
         // speaking doubles the work to produce the same result.
         toMono(decoded),
       );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      setSource(null);
       setStage('idle');
       const message = error instanceof Error ? error.message : String(error);
       Alert.alert(
         message.includes('no audio') ? t('noAudioTitle') : t('fileUnreadable'),
         message.includes('no audio') ? t('noAudioDesc') : t('fileUnreadableDesc'),
       );
+    } finally {
+      setBusy(false);
     }
   }, [setSource, setStage]);
 
@@ -109,10 +123,10 @@ export default function HomeScreen() {
   /**
    * Puts the cleaned file somewhere the user can actually find it.
    *
-   * The two platforms disagree about where that is. On iOS the app's Documents
-   * folder is the Files app -- the app declares file sharing, so it shows up
-   * under "On My iPhone". On Android Files does not show app storage at all, so
-   * the file goes into the shared music library instead.
+   * The two platforms disagree about where that is. On iOS the app presents
+   * the system folder picker so the user chooses their destination in Files.
+   * On Android Files does not show app storage at all, so the file goes into
+   * the shared music library instead.
    */
   const maybeShowInterstitial = useCallback(async () => {
     const { completions, lastInterstitialAt, markInterstitialShown } = useAdsStore.getState();
@@ -142,22 +156,39 @@ export default function HomeScreen() {
           return;
         }
         await MediaLibrary.createAssetAsync(outputUri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await useAdsStore.getState().recordCompletion();
+        Alert.alert(t('saved'), t('savedDesc'), [
+          { text: t('ok'), onPress: () => void maybeShowInterstitial() },
+        ]);
       } else {
         const destination = `${FileSystem.documentDirectory}${name}`;
         await FileSystem.deleteAsync(destination, { idempotent: true }).catch(() => undefined);
         await FileSystem.copyAsync({ from: outputUri, to: destination });
+
+        let saved = false;
+        if (codec.saveToFiles) {
+          try {
+            saved = await codec.saveToFiles(destination);
+          } catch {
+            saved = false;
+          }
+        }
+        if (!saved && (await Sharing.isAvailableAsync())) {
+          await Sharing.shareAsync(destination, {
+            mimeType: 'audio/mp4',
+            UTI: 'public.mpeg-4-audio',
+            dialogTitle: t('save'),
+          });
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await useAdsStore.getState().recordCompletion();
+        void maybeShowInterstitial();
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await useAdsStore.getState().recordCompletion();
-      // The ad waits behind the confirmation. Interrupting the moment the file lands -- or
-      // worse, while it is being written -- is the version of this that gets one-star reviews.
-      Alert.alert(t('saved'), t('savedDesc'), [
-        { text: t('ok'), onPress: () => void maybeShowInterstitial() },
-      ]);
     } catch (error) {
       Alert.alert(t('saveFailed'), error instanceof Error ? error.message : String(error));
     }
-  }, [outputUri, source]);
+  }, [maybeShowInterstitial, outputUri, source]);
 
   const handleShare = useCallback(async () => {
     if (!outputUri) return;
@@ -233,11 +264,15 @@ export default function HomeScreen() {
             disabled={busy}
             accessibilityRole="button"
             className="px-4 py-3 rounded-2xl flex-row items-center justify-center"
-            style={{ backgroundColor: theme.controlSurface, opacity: busy ? 0.5 : 1, minHeight: 44 }}
+            style={{ backgroundColor: theme.controlSurface, opacity: busy ? 0.6 : 1, minHeight: 44 }}
           >
-            <AudioLines size={16} color={theme.textSecondary} />
+            {busy && stage === 'decoding' ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} style={{ marginRight: 6 }} />
+            ) : (
+              <AudioLines size={16} color={theme.textSecondary} />
+            )}
             <Text className="text-sm font-bold ml-2" style={{ color: theme.textSecondary }}>
-              {source ? t('replaceFile') : t('chooseFile')}
+              {stage === 'decoding' ? t('decoding') : source ? t('replaceFile') : t('chooseFile')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -367,6 +402,66 @@ export default function HomeScreen() {
       {/* Anchored below the scroll area rather than inside it: a banner that scrolls with the
           content can sit under a finger reaching for the button above it. */}
       <AdBanner />
+
+      {busy || (stage !== 'idle' && stage !== 'ready') ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 999,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+              borderWidth: 1,
+              borderRadius: 24,
+              padding: 28,
+              alignItems: 'center',
+              width: '82%',
+              maxWidth: 320,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            <ActivityIndicator size="large" color={theme.primary} style={{ marginBottom: 16 }} />
+            <Text
+              style={{
+                color: theme.text,
+                fontSize: 18,
+                fontWeight: '700',
+                textAlign: 'center',
+                marginBottom: 6,
+              }}
+            >
+              {stageLabel ?? t('clean')}
+            </Text>
+            {source?.name ? (
+              <Text
+                numberOfLines={2}
+                style={{
+                  color: theme.textSecondary,
+                  fontSize: 13,
+                  textAlign: 'center',
+                  lineHeight: 18,
+                }}
+              >
+                {source.name}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }

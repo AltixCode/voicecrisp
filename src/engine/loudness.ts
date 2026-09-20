@@ -134,9 +134,12 @@ export const planGain = (
   return { gainDb, peakLimited: gainDb < wanted - 1e-9 };
 };
 
-/** Applies a gain in dB, in place. */
+/** Applies a gain in dB, in place, with safety peak limiting. */
 export const applyGain = (samples: Float32Array, gainDb: number): Float32Array => {
   const linear = Math.pow(10, gainDb / 20);
-  for (let i = 0; i < samples.length; i++) samples[i] *= linear;
+  for (let i = 0; i < samples.length; i++) {
+    const scaled = samples[i] * linear;
+    samples[i] = Math.max(-1, Math.min(1, scaled));
+  }
   return samples;
 };
