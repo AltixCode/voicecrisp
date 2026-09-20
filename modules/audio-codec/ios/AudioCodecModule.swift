@@ -46,7 +46,7 @@ public class AudioCodecModule: Module {
 
     AsyncFunction("saveToFiles") { (uri: String, promise: Promise) in
       DispatchQueue.main.async {
-        guard let vc = self.appContext.utilities?.currentViewController() else {
+        guard let vc = self.appContext?.utilities?.currentViewController() else {
           promise.resolve(false)
           return
         }
